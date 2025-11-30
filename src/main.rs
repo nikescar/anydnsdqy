@@ -375,7 +375,7 @@ impl MyHandler {
                 }
                 tracing::trace!("[{:?}]msgparts : {:?}", index, msgparts);
 
-                if msgparts[0] == "." && msgparts[1] == "OPT" && msgparts[2] == "0" && msgparts[3] == "0" && msgparts[4] == "0" && msgparts[5] == "0" && msgparts[6] == "0" {
+                if msgparts[0] == "." && msgparts[1] == "OPT" && msgparts[3] == "0" && msgparts[4] == "0" && msgparts[5] == "0" {
                     tracing::debug!("fin {:?}", reply);
                     return reply.build_bytes_vec().unwrap();
                 }
