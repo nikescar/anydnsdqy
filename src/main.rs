@@ -375,9 +375,16 @@ impl MyHandler {
                 }
                 tracing::trace!("[{:?}]msgparts : {:?}", index, msgparts);
 
-                if msgparts[0] == "." && msgparts[1] == "OPT" && msgparts[3] == "0" && msgparts[4] == "0" && msgparts[5] == "0" {
+                // Detect OPT record to end parsing
+                // Format: . OPT <bufsize> <ext-rcode> <version> <flags> <rdlength>
+                if msgparts.len() >= 2 && msgparts[0] == "." && msgparts[1] == "OPT" {
                     tracing::debug!("fin {:?}", reply);
                     return reply.build_bytes_vec().unwrap();
+                }
+
+                // Skip empty lines or lines with insufficient parts
+                if msgparts.len() < 2 {
+                    continue;
                 }
 
                 match msgparts[1] {
@@ -904,6 +911,10 @@ impl MyHandler {
                             Some(ref s) if s == "MX" => 15,
                             Some(ref s) if s == "TXT" => 16,
                             Some(ref s) if s == "AAAA" => 28,
+                            Some(ref s) if s == "DNSKEY" => 48,
+                            Some(ref s) if s == "DS" => 43,
+                            Some(ref s) if s == "RRSIG" => 46,
+                            Some(ref s) if s == "NSEC" => 47,
                             Some(s) => {
                                 tracing::warn!("Unknown type_covered: {}", s);
                                 0
@@ -945,8 +956,15 @@ impl MyHandler {
                         // let signature_inception = msgparts.get(9).unwrap_or(&"0").parse().unwrap_or(0);
                         let key_tag = msgparts.get(10).unwrap_or(&"0").parse().unwrap_or(0);
                         let signer_name = Name::new(msgparts.get(7).unwrap_or(&"")).unwrap();
-                        let signature = msgparts.get(11).unwrap_or(&"").as_bytes().to_vec().into();
-                        tracing::debug!("rrsig val: {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}", type_covered, algorithm, labels, original_ttl, signature_expiration, signature_inception, key_tag, signer_name, signature);
+                        // Decode base64 signature to binary
+                        let signature_b64 = msgparts.get(11).unwrap_or(&"");
+                        let signature = if let Ok(decoded) = data_encoding::BASE64.decode(signature_b64.as_bytes()) {
+                            std::borrow::Cow::from(decoded)
+                        } else {
+                            // Fallback to raw bytes if decoding fails
+                            std::borrow::Cow::from(signature_b64.as_bytes().to_vec())
+                        };
+                        tracing::debug!("rrsig val: {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, base64_len:{}", type_covered, algorithm, labels, original_ttl, signature_expiration, signature_inception, key_tag, signer_name, signature_b64.len());
                         reply.answers.push(ResourceRecord::new(
                             question.qname.clone(),
                             simple_dns::CLASS::IN,
@@ -989,8 +1007,15 @@ impl MyHandler {
                             Some(s) => s.parse().unwrap_or(0),
                             None => 0,
                         };
-                        let public_key = msgparts.get(8).map(|s| s.to_string()).unwrap_or_default();
-                        tracing::debug!("dnskey val: {:?}, {:?}, {:?}, {:?}", flags, protocol, algorithm, public_key);
+                        let public_key_b64 = msgparts.get(8).map(|s| s.to_string()).unwrap_or_default();
+                        // Decode base64 public key to binary
+                        let public_key = if let Ok(decoded) = data_encoding::BASE64.decode(public_key_b64.as_bytes()) {
+                            std::borrow::Cow::from(decoded)
+                        } else {
+                            // Fallback to raw bytes if decoding fails
+                            std::borrow::Cow::from(public_key_b64.as_bytes().to_vec())
+                        };
+                        tracing::debug!("dnskey val: {:?}, {:?}, {:?}, base64_len:{}", flags, protocol, algorithm, public_key_b64.len());
                         reply.answers.push(ResourceRecord::new(
                             question.qname.clone(),
                             simple_dns::CLASS::IN,
@@ -999,7 +1024,7 @@ impl MyHandler {
                                 flags,
                                 protocol,
                                 algorithm,
-                                public_key: std::borrow::Cow::from(public_key.as_bytes().to_vec()),
+                                public_key,
                             }),
                         ));
                     }

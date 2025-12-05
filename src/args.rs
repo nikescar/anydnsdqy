@@ -884,6 +884,12 @@ Supported query types: {}
         options.edns.zoneversion = matches.get_flag("zoneversion");
         options.edns.padding = matches.get_one::<u16>("padding").copied();
 
+        // When running as a DNS server (bind_addr is set), always enable DNSSEC
+        // to ensure we receive RRSIG records from upstream DNS for proper validation
+        if options.service.bind_addr.is_some() {
+            options.edns.dnssec = true;
+        }
+
         // options.edns.dau = matches.get_many::<u8>("dau").map(|v| v.copied().collect::<Vec<u8>>());
         // options.edns.dhu = matches.get_many::<u8>("dhu").map(|v| v.copied().collect::<Vec<u8>>());
         // options.edns.n3u = matches.get_many::<u8>("n3u").map(|v| v.copied().collect::<Vec<u8>>());
