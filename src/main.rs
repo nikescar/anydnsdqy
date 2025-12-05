@@ -30,7 +30,7 @@ use dns_socket::{DnsSocket};
 
 use async_trait::async_trait;
 use dnslib::dns::rfc::domain::DomainName;
-use simple_dns::{CharacterString, Name, Packet, ResourceRecord, QTYPE, TYPE};
+use simple_dns::{CharacterString, Name, Packet, ResourceRecord, QTYPE, RCODE, TYPE};
 use simple_dns::rdata::{A, AAAA, NS, MD, CNAME, MB, MG, MR, PTR, MF, HINFO, MINFO, MX, TXT, SOA, WKS, SRV, RP, AFSDB, ISDN, RouteThrough, NAPTR, NSAP, NSAP_PTR, LOC, OPT, CAA, SVCB, HTTPS, EUI48, EUI64, CERT, ZONEMD, KX, IPSECKEY, DNSKEY, RRSIG, DS, NSEC, DHCID};
 
 use crate::args::CliOptions;
@@ -487,6 +487,7 @@ impl MyHandler {
                         ));
                     }
                     "SOA" => {
+                        let soa_domain = Name::new(msgparts[0]).unwrap();
                         let mname = Name::new(msgparts.get(5).unwrap_or(&"")).unwrap();
                         let rname = Name::new(msgparts.get(6).unwrap_or(&"")).unwrap();
                         let serial = msgparts.get(7).unwrap_or(&"0").parse().unwrap_or(0);
@@ -495,8 +496,12 @@ impl MyHandler {
                         let expire = msgparts.get(10).unwrap_or(&"0").parse().unwrap_or(0);
                         let minimum = msgparts.get(11).unwrap_or(&"0").parse().unwrap_or(0);
                         tracing::debug!("soa val: {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}", mname, rname, serial, refresh, retry, expire, minimum);
-                        reply.answers.push(ResourceRecord::new(
-                            question.qname.clone(),
+
+                        // Check if this is NXDOMAIN (SOA domain differs from query domain)
+                        let is_nxdomain = soa_domain.to_string() != question.qname.to_string();
+
+                        let soa_record = ResourceRecord::new(
+                            soa_domain.clone(),
                             simple_dns::CLASS::IN,
                             msgparts[3].parse().unwrap_or(120),
                             simple_dns::rdata::RData::SOA(simple_dns::rdata::SOA {
@@ -508,7 +513,17 @@ impl MyHandler {
                                 expire,
                                 minimum,
                             }),
-                        ));
+                        );
+
+                        if is_nxdomain {
+                            // NXDOMAIN response: SOA goes in AUTHORITY section
+                            reply.name_servers.push(soa_record);
+                            *reply.rcode_mut() = RCODE::NameError;
+                            tracing::debug!("NXDOMAIN response: SOA in AUTHORITY section");
+                        } else {
+                            // Legitimate SOA query: SOA goes in ANSWER section
+                            reply.answers.push(soa_record);
+                        }
                     }
                     "SRV" => {
                         let priority = msgparts.get(5).unwrap_or(&"0").parse().unwrap_or(0);
@@ -945,9 +960,21 @@ impl MyHandler {
                             },
                             None => 0,
                         };
-                        let labels = msgparts.get(7).map(|s| s.matches('.').count() as u8).unwrap_or(0);
-                        let labels = if labels > 1 { labels - 1 } else { labels };
-                        let original_ttl = msgparts.get(3).unwrap_or(&"0").parse().unwrap_or(0);
+                        // RFC 4034: labels field is the number of labels in the original RRSET owner name
+                        // For "." (root), this is 0. For "com.", this is 1. For "example.com.", this is 2.
+                        // Count non-empty parts when splitting by '.'
+                        let labels = msgparts.get(7).map(|s| {
+                            s.split('.').filter(|part| !part.is_empty()).count() as u8
+                        }).unwrap_or(0);
+
+                        // FIXME: dqy's text output doesn't include the original_ttl field, so we need to
+                        // parse it from the binary RRData instead. For now, use a heuristic:
+                        // DNSKEY records typically have 172800 (48h) or 86400 (24h) original TTL
+                        let original_ttl = match msgparts.get(5).map(|s| s.to_ascii_uppercase()) {
+                            Some(ref s) if s == "DNSKEY" => 172800, // 48 hours for DNSKEY
+                            Some(ref s) if s == "DS" => 86400,      // 24 hours for DS
+                            _ => msgparts.get(3).unwrap_or(&"86400").parse().unwrap_or(86400),
+                        };
                         let v = NaiveDateTime::parse_from_str(msgparts.get(8).unwrap_or(&"0"), "%Y%m%d%H%M%S").ok();
                         let signature_expiration = v.map(|dt| dt.timestamp() as u32).unwrap_or(0);
                         let v = NaiveDateTime::parse_from_str(msgparts.get(9).unwrap_or(&"0"), "%Y%m%d%H%M%S").ok();
@@ -957,7 +984,12 @@ impl MyHandler {
                         let key_tag = msgparts.get(10).unwrap_or(&"0").parse().unwrap_or(0);
                         let signer_name = Name::new(msgparts.get(7).unwrap_or(&"")).unwrap();
                         // Decode base64 signature to binary
-                        let signature_b64 = msgparts.get(11).unwrap_or(&"");
+                        // Concatenate all remaining parts from index 11 onwards (signature may be split)
+                        let signature_b64 = if msgparts.len() > 11 {
+                            msgparts[11..].join("")
+                        } else {
+                            String::new()
+                        };
                         let signature = if let Ok(decoded) = data_encoding::BASE64.decode(signature_b64.as_bytes()) {
                             std::borrow::Cow::from(decoded)
                         } else {
@@ -1007,7 +1039,12 @@ impl MyHandler {
                             Some(s) => s.parse().unwrap_or(0),
                             None => 0,
                         };
-                        let public_key_b64 = msgparts.get(8).map(|s| s.to_string()).unwrap_or_default();
+                        // Concatenate all remaining parts from index 8 onwards (public key may be split)
+                        let public_key_b64 = if msgparts.len() > 8 {
+                            msgparts[8..].join("")
+                        } else {
+                            String::new()
+                        };
                         // Decode base64 public key to binary
                         let public_key = if let Ok(decoded) = data_encoding::BASE64.decode(public_key_b64.as_bytes()) {
                             std::borrow::Cow::from(decoded)
@@ -1029,10 +1066,8 @@ impl MyHandler {
                         ));
                     }
                     "DS" => { // https://www.rfc-editor.org/rfc/rfc4034.html#section-5.1
-                        // DS cannot by used
-                        // if server sends digest of BE7435995466069D5C63D20C39F5603827D7DD2B56F12EE9F3A86764247C
-                        // client receives           BE743599546669D5C63D2C39F5603827D7DD2B56F12EE9F3A86764247C
                         // DS expects key_tag, algorithm, digest_type, and digest
+                        // The digest may be split across multiple parts in dqy output, so we need to concatenate them
                         let key_tag = msgparts.get(5).unwrap_or(&"0").parse().unwrap_or(0);
                         let algorithm = match msgparts.get(6).map(|s| s.to_ascii_uppercase()) {
                             Some(ref s) if s == "RSAMD5" => 1,
@@ -1051,12 +1086,20 @@ impl MyHandler {
                             None => 0,
                         };
                         let digest_type = msgparts.get(7).unwrap_or(&"0").parse().unwrap_or(0); // digest type 0 - reserved, 1 - SHA-1, 2 - SHA-256, 3 - GOST R 34.11-94
-                        // let digest = msgparts.get(8).unwrap_or(&"").as_bytes().to_vec().into();
-                        let digest_str = msgparts.get(8).unwrap_or(&"");
-                        let digest_hex = hex::decode(digest_str).unwrap_or_default();
-                        tracing::debug!("digest {:?}, {:?}", digest_hex, digest_str);
-                        let digest = std::borrow::Cow::from(digest_hex.clone());
-                        tracing::debug!("ds val: {:?}, {:?}, {:?}, {:?}, {:?}", key_tag, algorithm, digest_type, digest_str, digest);
+
+                        // Concatenate all remaining parts from index 8 onwards to form the complete digest
+                        // This handles cases where dqy splits the digest across multiple whitespace-separated parts
+                        let digest_str = if msgparts.len() > 8 {
+                            msgparts[8..].join("")
+                        } else {
+                            String::new()
+                        };
+
+                        let digest_hex = hex::decode(&digest_str).unwrap_or_default();
+                        tracing::debug!("ds val: key_tag={:?}, algorithm={:?}, digest_type={:?}, digest_str={:?}, digest_len={:?}",
+                            key_tag, algorithm, digest_type, digest_str, digest_hex.len());
+                        let digest = std::borrow::Cow::from(digest_hex);
+
                         reply.answers.push(ResourceRecord::new(
                             question.qname.clone(),
                             simple_dns::CLASS::IN,
@@ -1068,8 +1111,6 @@ impl MyHandler {
                                 digest,
                             }),
                         ));
-                        // let replybytes = reply.build_bytes_vec();
-                        // tracing::debug!("reply packet bytes {:?}",replybytes)
                     }
                     // "NSEC" => {
                     //     // NSEC expects next_domain_name and type_bit_maps
@@ -1293,8 +1334,23 @@ impl MyHandler {
                 self.get_messages_using_sync_transport(info, &mut transport, options).await
             }
             Protocol::DoH => {
-                let mut transport = HttpsProtocol::new(&options.transport)?;
-                self.get_messages_using_sync_transport(info, &mut transport, options).await
+                // let mut transport = HttpsProtocol::new(&options.transport)?;
+                // self.get_messages_using_sync_transport(info, &mut transport, options).await
+                // Clone options for moving into spawn_blocking
+                let options_clone = options.clone();
+
+                // Wrap blocking DoH operations in spawn_blocking to avoid runtime panic
+                let handle = tokio::task::spawn_blocking(move || {
+                    let mut transport = HttpsProtocol::new(&options_clone.transport)?;
+                    DnsProtocol::sync_process_request(&options_clone, &mut transport, BUFFER_SIZE)
+                });
+
+                // Await the blocking task and handle errors
+                let messages = handle.await
+                    .expect("DoH task should not panic")?;
+
+                tracing::debug!("received messages: {:?}", messages);
+                Ok(messages)
             }
             Protocol::DoQ => {
                 let mut transport = QuicProtocol::new(&options.transport).await?;
