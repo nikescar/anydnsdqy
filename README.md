@@ -63,6 +63,7 @@ CDS
 CDNSKEY
 OPENPGPKEY
 SSHFP >>
+URI >>
 ```
 
 ## Todo
@@ -85,25 +86,15 @@ RouteThrough >>
 RP >>
 WKS >>
 -----------------
-algorithm
 apl
 csync
-hip
-opt
-rrlist
-tlsa
-type_bitmaps
-uri
-wallet
 ```
 simple_dns Not Implemented Types
 ```
 TLSA
-URI >>
+SMIMEA
+HIP
 WALLET
 ```
-TLSA
-SMIMEA
-URI
-HIP
+
 
