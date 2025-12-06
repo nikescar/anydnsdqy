@@ -7,7 +7,7 @@ on:
     branches: [ "master" ]
 
 env:
-  RUST_VERSION: 1.86.0
+  RUST_VERSION: 1.88.0
   BIN_NAME: "anydnsdqy"
 
 jobs:
@@ -48,13 +48,13 @@ jobs:
             target: i686-unknown-freebsd
             build-args: "--release"
 
-          # - name: Android aarch64
-          #   target: aarch64-linux-android
-          #   build-args: "--release"
+          - name: Android aarch64
+            target: aarch64-linux-android
+            build-args: "--release"
 
-          # - name: Android armv7
-          #   target: armv7-linux-androideabi
-          #   build-args: "--release"
+          - name: Android armv7
+            target: armv7-linux-androideabi
+            build-args: "--release"
 
           #- name: Linux mips
           #  target: mips-unknown-linux-musl
