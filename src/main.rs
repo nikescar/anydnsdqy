@@ -244,10 +244,10 @@ impl CustomHandler for MyHandler {
             self.options.protocol.qtype.push(QType::DHCID);
             cantranslate = true; // dqy supports => true
         }
-        // if question.qtype == QTYPE::TYPE(TYPE::SSHFP){ 
-        //     self.options.protocol.qtype.push(QType::SSHFP);
-        //     cantranslate = true;
-        // }
+        if question.qtype == QTYPE::TYPE(TYPE::SSHFP){ 
+            self.options.protocol.qtype.push(QType::SSHFP);
+            cantranslate = true;
+        }
         // if question.qtype == QTYPE::TYPE(TYPE::TLSA){
         //     self.options.protocol.qtype.push(QType::TLSA);
         //     cantranslate = true;

@@ -61,6 +61,8 @@ NSEC3
 NSEC3PARAM
 CDS
 CDNSKEY
+OPENPGPKEY
+SSHFP >>
 ```
 
 ## Todo
@@ -87,10 +89,8 @@ algorithm
 apl
 csync
 hip
-openpgpkey
 opt
 rrlist
-sshfp
 tlsa
 type_bitmaps
 uri
@@ -98,17 +98,11 @@ wallet
 ```
 simple_dns Not Implemented Types
 ```
-OPENPGPKEY >>
-SSHFP >>
 TLSA
 URI >>
 WALLET
 ```
-
-
-SSHFP
 TLSA
-OPENPGPKEY
 SMIMEA
 URI
 HIP
