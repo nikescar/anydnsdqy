@@ -232,6 +232,10 @@ impl CustomHandler for MyHandler {
             self.options.protocol.qtype.push(QType::CDNSKEY);
             cantranslate = true; // dqy supports => true
         }
+        if question.qtype == QTYPE::TYPE(TYPE::OPENPGPKEY){
+            self.options.protocol.qtype.push(QType::OPENPGPKEY);
+            cantranslate = true; // dqy supports => true
+        }
         if question.qtype == QTYPE::TYPE(TYPE::NSEC){
             self.options.protocol.qtype.push(QType::NSEC);
             cantranslate = true; // dqy supports => true
@@ -240,18 +244,6 @@ impl CustomHandler for MyHandler {
             self.options.protocol.qtype.push(QType::DHCID);
             cantranslate = true; // dqy supports => true
         }
-        // if question.qtype == QTYPE::TYPE(TYPE::NSEC3){
-        //     self.options.protocol.qtype.push(QType::NSEC3)
-        //     cantranslate = true;
-        // }
-        // if question.qtype == QTYPE::TYPE(TYPE::NSEC3PARAM){
-        //     self.options.protocol.qtype.push(QType::NSEC3PARAM)
-        //     cantranslate = true;
-        // }
-        // if question.qtype == QTYPE::TYPE(TYPE::OPENPGPKEY){ 
-        //     self.options.protocol.qtype.push(QType::OPENPGPKEY);
-        //     cantranslate = true;
-        // }
         // if question.qtype == QTYPE::TYPE(TYPE::SSHFP){ 
         //     self.options.protocol.qtype.push(QType::SSHFP);
         //     cantranslate = true;

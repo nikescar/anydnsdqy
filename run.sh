@@ -68,8 +68,8 @@ delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t SSHFP github.com
 echo "TLSA test"
 delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t TLSA _443._tcp.www.huque.com
 
-echo "OPENPGPKEY test"
-delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t OPENPGPKEY _openpgpkey.example.com
+echo "OPENPGPKEY test" # https://blog.ari.lt/b/openpgpkey-records-are-cool/
+dig @127.0.0.1 -p 25454 d2efaa6dd6ae6136c19944fae329efd3fb2babe1e6eec26982a422aa._openpgpkey.ari.lt. OPENPGPKEY
 
 echo "SMIMEA test"
 delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t SMIMEA _smimecert.example.com
