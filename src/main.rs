@@ -294,7 +294,17 @@ impl MyHandler {
         let question = packet.questions.get(0).expect("Valid query");
         let messages = self.get_messages(self.info.clone(), &self.options).await;
 
-        let messagestr = messages.unwrap();
+        let messagestr = match messages {
+            Ok(msg) => msg,
+            Err(e) => {
+                tracing::error!("Failed to get messages: {:?}", e);
+                // Return SERVFAIL response
+                let mut reply = Packet::new_reply(packet.id());
+                reply.questions.push(question.clone());
+                *reply.rcode_mut() = RCODE::ServerFailure;
+                return reply.build_bytes_vec().unwrap();
+            }
+        };
 
         tracing::debug!("messagestr : {}",messagestr);
         let mut reply = Packet::new_reply(packet.id());
@@ -572,28 +582,30 @@ impl MyHandler {
                             }),
                         ));
                     }
-                    // "NAPTR" => {
-                    //     // NAPTR expects order, preference, flags, services, regexp, replacement
-                    //     let order = msgpart.get(18).unwrap_or(&"0").parse().unwrap_or(0);
-                    //     let preference = msgpart.get(19).unwrap_or(&"0").parse().unwrap_or(0);
-                    //     let flags = msgpart.get(20).unwrap_or(&"").as_bytes().to_vec();
-                    //     let services = msgpart.get(21).unwrap_or(&"").as_bytes().to_vec();
-                    //     let regexp = msgpart.get(22).unwrap_or(&"").as_bytes().to_vec();
-                    //     let replacement = Name::new(msgpart.get(23).unwrap_or(&"")).unwrap();
-                    //     reply.answers.push(ResourceRecord::new(
-                    //         question.qname.clone(),
-                    //         simple_dns::CLASS::IN,
-                    //         120,
-                    //         simple_dns::rdata::RData::NAPTR(simple_dns::rdata::NAPTR {
-                    //             order: order,
-                    //             preference: preference,
-                    //             flags: CharacterString::new(flags).unwrap(),
-                    //             services: CharacterString::new(services).unwrap(),
-                    //             regexp: CharacterString::new(msgpart.get(22).unwrap_or(&"").as_bytes()).unwrap(),
-                    //             replacement: replacement,
-                    //         }),
-                    //     ));
-                    // }
+                    "NAPTR" => {
+                        // NAPTR expects order, preference, flags, services, regexp, replacement
+                        let order = msgparts.get(5).unwrap_or(&"0").parse().unwrap_or(0);
+                        let preference = msgparts.get(6).unwrap_or(&"0").parse().unwrap_or(0);
+                        let flags = msgparts.get(7).unwrap_or(&"").trim_matches('"');
+                        let services = msgparts.get(8).unwrap_or(&"").trim_matches('"');
+                        let regexp = msgparts.get(9).unwrap_or(&"").trim_matches('"');
+                        let replacement = Name::new(msgparts.get(10).unwrap_or(&".")).unwrap();
+                        tracing::debug!("naptr val: order:{}, pref:{}, flags:{}, services:{}, regexp:{}, replacement:{}",
+                            order, preference, flags, services, regexp, replacement);
+                        reply.answers.push(ResourceRecord::new(
+                            question.qname.clone(),
+                            simple_dns::CLASS::IN,
+                            msgparts[3].parse().unwrap_or(120),
+                            simple_dns::rdata::RData::NAPTR(simple_dns::rdata::NAPTR {
+                                order,
+                                preference,
+                                flags: simple_dns::CharacterString::new(flags.as_bytes()).unwrap(),
+                                services: simple_dns::CharacterString::new(services.as_bytes()).unwrap(),
+                                regexp: simple_dns::CharacterString::new(regexp.as_bytes()).unwrap(),
+                                replacement,
+                            }),
+                        ));
+                    }
                     "LOC" => {
                         // LOC expects version, size, horiz_pre, vert_pre, latitude, longitude, altitude
                         let version = msgparts.get(5).unwrap_or(&"0").parse().unwrap_or(0);
@@ -984,8 +996,14 @@ impl MyHandler {
                             std::borrow::Cow::from(signature_b64.as_bytes().to_vec())
                         };
                         tracing::debug!("rrsig val: {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, base64_len:{}", type_covered, algorithm, labels, original_ttl, signature_expiration, signature_inception, key_tag, signer_name, signature_b64.len());
-                        reply.answers.push(ResourceRecord::new(
-                            question.qname.clone(),
+
+                        // Use the actual owner name from the RR (msgparts[0]), or fall back to query name
+                        let owner_name = msgparts.get(0)
+                            .and_then(|s| Name::new(s).ok())
+                            .unwrap_or_else(|| question.qname.clone());
+
+                        let rrsig_record = ResourceRecord::new(
+                            owner_name,
                             simple_dns::CLASS::IN,
                             msgparts[3].parse().unwrap_or(120),
                             simple_dns::rdata::RData::RRSIG(simple_dns::rdata::RRSIG {
@@ -999,7 +1017,16 @@ impl MyHandler {
                                 signer_name,
                                 signature,
                             }),
-                        ));
+                        );
+
+                        // Check if this is an NXDOMAIN response (NameError rcode)
+                        if reply.rcode() == RCODE::NameError {
+                            // NXDOMAIN response: RRSIG goes in AUTHORITY section
+                            reply.name_servers.push(rrsig_record);
+                        } else {
+                            // Normal response: RRSIG goes in ANSWER section
+                            reply.answers.push(rrsig_record);
+                        }
                     }
                     "DNSKEY" => { // https://www.rfc-editor.org/rfc/rfc4034.html#section-2
                         // DNSKEY expects flags, protocol, algorithm, and public key
@@ -1099,20 +1126,75 @@ impl MyHandler {
                             }),
                         ));
                     }
-                    // "NSEC" => {
-                    //     // NSEC expects next_domain_name and type_bit_maps
-                    //     let next_domain_name = Name::new(msgparts[5]).unwrap();
-                    //     let type_bit_maps = msgpart.get(18).map(|s| s.to_string()).unwrap_or_default();
-                    //     reply.answers.push(ResourceRecord::new(
-                    //         question.qname.clone(),
-                    //         simple_dns::CLASS::IN,
-                    //         msgparts[3].parse().unwrap_or(120),
-                    //         simple_dns::rdata::RData::NSEC(simple_dns::rdata::NSEC {
-                    //             next_domain_name,
-                    //             type_bit_maps: std::borrow::Cow::from(type_bit_maps.as_bytes()),
-                    //         }),
-                    //     ));
-                    // }
+                    "NSEC" => {
+                        // NSEC format: name type class ttl rdlength next_domain types...
+                        // Example: e164.arpa. NSEC IN 3600 26 6.4.2.e164.arpa. NS SOA RRSIG NSEC DNSKEY
+                        let next_name = Name::new(msgparts.get(5).unwrap_or(&".")).unwrap();
+
+                        // Type bit maps: convert space-separated type names to binary bitmap
+                        // Collect all type names from index 6 onwards
+                        let type_names: Vec<&str> = msgparts.iter().skip(6).map(|s| *s).collect();
+
+                        // Convert type names to QType numbers and create bitmap
+                        // RFC 4034: NSEC uses window blocks, we'll use window 0 for types 0-255
+                        let mut type_bits = vec![0u8; 32]; // Max 256 bits = 32 bytes for window 0
+
+                        for type_name in &type_names {
+                            let type_num = match *type_name {
+                                "A" => 1, "NS" => 2, "MD" => 3, "MF" => 4, "CNAME" => 5,
+                                "SOA" => 6, "MB" => 7, "MG" => 8, "MR" => 9, "NULL" => 10,
+                                "WKS" => 11, "PTR" => 12, "HINFO" => 13, "MINFO" => 14, "MX" => 15,
+                                "TXT" => 16, "RP" => 17, "AFSDB" => 18, "X25" => 19, "ISDN" => 20,
+                                "RT" => 21, "NSAP" => 22, "NSAP-PTR" => 23, "SIG" => 24, "KEY" => 25,
+                                "PX" => 26, "GPOS" => 27, "AAAA" => 28, "LOC" => 29, "NXT" => 30,
+                                "EID" => 31, "NIMLOC" => 32, "SRV" => 33, "ATMA" => 34, "NAPTR" => 35,
+                                "KX" => 36, "CERT" => 37, "A6" => 38, "DNAME" => 39, "SINK" => 40,
+                                "OPT" => 41, "APL" => 42, "DS" => 43, "SSHFP" => 44, "IPSECKEY" => 45,
+                                "RRSIG" => 46, "NSEC" => 47, "DNSKEY" => 48, "DHCID" => 49,
+                                "NSEC3" => 50, "NSEC3PARAM" => 51, "TLSA" => 52,
+                                _ => continue, // Skip unknown types
+                            };
+
+                            // Set the bit for this type
+                            let byte_pos = type_num / 8;
+                            let bit_pos = 7 - (type_num % 8);
+                            if byte_pos < type_bits.len() {
+                                type_bits[byte_pos] |= 1 << bit_pos;
+                            }
+                        }
+
+                        // Trim trailing zeros to minimize bitmap size
+                        while type_bits.last() == Some(&0) && type_bits.len() > 1 {
+                            type_bits.pop();
+                        }
+
+                        tracing::debug!("NSEC record: next_domain={}, types={:?}, bitmap_len={}",
+                            next_name, type_names, type_bits.len());
+
+                        // Create NsecTypeBitMap for window block 0
+                        let type_bit_maps = vec![simple_dns::rdata::NsecTypeBitMap {
+                            window_block: 0,
+                            bitmap: std::borrow::Cow::from(type_bits),
+                        }];
+
+                        // Use the actual owner name from the RR (msgparts[0]), or fall back to query name
+                        let owner_name = msgparts.get(0)
+                            .and_then(|s| Name::new(s).ok())
+                            .unwrap_or_else(|| question.qname.clone());
+
+                        let nsec_record = ResourceRecord::new(
+                            owner_name,
+                            simple_dns::CLASS::IN,
+                            msgparts[3].parse().unwrap_or(120),
+                            simple_dns::rdata::RData::NSEC(simple_dns::rdata::NSEC {
+                                next_name,
+                                type_bit_maps,
+                            }),
+                        );
+
+                        // NSEC records go in authority section for NXDOMAIN
+                        reply.name_servers.push(nsec_record);
+                    }
                     // "DHCID" => {
                     //     // DHCID expects a hex string
                     //     let dhcid_hex = msgpart.get(17).unwrap_or(&"");
