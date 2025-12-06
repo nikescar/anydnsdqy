@@ -960,33 +960,20 @@ impl MyHandler {
                             },
                             None => 0,
                         };
-                        // RFC 4034: labels field is the number of labels in the original RRSET owner name
-                        // For "." (root), this is 0. For "com.", this is 1. For "example.com.", this is 2.
-                        // Count non-empty parts when splitting by '.'
-                        let labels = msgparts.get(7).map(|s| {
-                            s.split('.').filter(|part| !part.is_empty()).count() as u8
-                        }).unwrap_or(0);
-
-                        // FIXME: dqy's text output doesn't include the original_ttl field, so we need to
-                        // parse it from the binary RRData instead. For now, use a heuristic:
-                        // DNSKEY records typically have 172800 (48h) or 86400 (24h) original TTL
-                        let original_ttl = match msgparts.get(5).map(|s| s.to_ascii_uppercase()) {
-                            Some(ref s) if s == "DNSKEY" => 172800, // 48 hours for DNSKEY
-                            Some(ref s) if s == "DS" => 86400,      // 24 hours for DS
-                            _ => msgparts.get(3).unwrap_or(&"86400").parse().unwrap_or(86400),
-                        };
-                        let v = NaiveDateTime::parse_from_str(msgparts.get(8).unwrap_or(&"0"), "%Y%m%d%H%M%S").ok();
+                        // RFC 4034: Parse RRSIG fields from dqy's text output
+                        // Format: RRSIG type_covered algorithm labels original_ttl signer_name expiration inception key_tag signature
+                        let labels = msgparts.get(7).unwrap_or(&"0").parse().unwrap_or(0);
+                        let original_ttl = msgparts.get(8).unwrap_or(&"0").parse().unwrap_or(0);
+                        let signer_name = Name::new(msgparts.get(9).unwrap_or(&"")).unwrap();
+                        let v = NaiveDateTime::parse_from_str(msgparts.get(10).unwrap_or(&"0"), "%Y%m%d%H%M%S").ok();
                         let signature_expiration = v.map(|dt| dt.timestamp() as u32).unwrap_or(0);
-                        let v = NaiveDateTime::parse_from_str(msgparts.get(9).unwrap_or(&"0"), "%Y%m%d%H%M%S").ok();
+                        let v = NaiveDateTime::parse_from_str(msgparts.get(11).unwrap_or(&"0"), "%Y%m%d%H%M%S").ok();
                         let signature_inception = v.map(|dt| dt.timestamp() as u32).unwrap_or(0);
-                        // let signature_expiration = msgparts.get(8).unwrap_or(&"0").parse().unwrap_or(0);
-                        // let signature_inception = msgparts.get(9).unwrap_or(&"0").parse().unwrap_or(0);
-                        let key_tag = msgparts.get(10).unwrap_or(&"0").parse().unwrap_or(0);
-                        let signer_name = Name::new(msgparts.get(7).unwrap_or(&"")).unwrap();
+                        let key_tag = msgparts.get(12).unwrap_or(&"0").parse().unwrap_or(0);
                         // Decode base64 signature to binary
-                        // Concatenate all remaining parts from index 11 onwards (signature may be split)
-                        let signature_b64 = if msgparts.len() > 11 {
-                            msgparts[11..].join("")
+                        // Concatenate all remaining parts from index 13 onwards (signature may be split)
+                        let signature_b64 = if msgparts.len() > 13 {
+                            msgparts[13..].join("")
                         } else {
                             String::new()
                         };
