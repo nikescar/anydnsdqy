@@ -55,13 +55,16 @@ CAA
 DNSKEY
 RRSIG
 DS
+NAPTR
+NSEC
+NSEC3
+NSEC3PARAM
 ```
 
 ## Todo
 
 DQY Supported But Not Implemented Types
 ```
-NAPTR >>
 EUI48 >>
 EUI64 >>
 CERT >>
@@ -69,13 +72,11 @@ ZONEMD >>
 KX >>
 IPSECKEY >>
 DNAME
-NSEC
 DHCID >>
 -----------------
 ISDN >>
 MINFO >>
 NSAP >>
-NSEC >>
 RouteThrough >>
 RP >>
 WKS >>
@@ -93,14 +94,20 @@ type_bitmaps
 uri
 wallet
 ```
-
 simple_dns Not Implemented Types
 ```
-NSEC3
-NSEC3PARAM
 OPENPGPKEY >>
 SSHFP >>
 TLSA
 URI >>
 WALLET
 ```
+
+
+
+
+CERT 
+KX 
+IPSECKEY 
+OPENPGPKEY 
+SSHFP 

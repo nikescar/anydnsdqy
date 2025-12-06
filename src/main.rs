@@ -1129,7 +1129,14 @@ impl MyHandler {
                     "NSEC" => {
                         // NSEC format: name type class ttl rdlength next_domain types...
                         // Example: e164.arpa. NSEC IN 3600 26 6.4.2.e164.arpa. NS SOA RRSIG NSEC DNSKEY
-                        let next_name = Name::new(msgparts.get(5).unwrap_or(&".")).unwrap();
+                        // Note: NSEC3 (used by Cloudflare) has hashed names that may not be valid DNS labels
+                        let next_name = match Name::new(msgparts.get(5).unwrap_or(&".")) {
+                            Ok(name) => name,
+                            Err(e) => {
+                                tracing::warn!("NSEC next_name parse failed (likely NSEC3): {:?}, skipping NSEC record", e);
+                                continue;
+                            }
+                        };
 
                         // Type bit maps: convert space-separated type names to binary bitmap
                         // Collect all type names from index 6 onwards
