@@ -15,12 +15,13 @@ exclude = [
 [dependencies]
 async-trait = "0.1.77"
 dyn-clone = "1.0.16"
-simple-dns = { git = "https://github.com/nikescar/simple-dns", branch = "only-simpledns" } # rev = "" tag = "" 
+simple-dns = { git = "https://github.com/nikescar/simple-dns", branch = "only-simpledns" } # rev = "" tag = ""
 thiserror = "1.0.56"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 dnslib = { git = "https://github.com/nikescar/dqy", branch = "main" }
+# dnslib = { path = "../dqy" }
 clap = { version = "4.5.26", features = ["cargo"] }
 rustc_version_runtime = "0.3.0"
 hex = "0.4.3"

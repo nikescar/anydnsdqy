@@ -11,13 +11,92 @@
 #   # server=1.1.1.1
 
 
-echo "NAPTR test"
-delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t NAPTR 4.4.4.4.2.3.3.2.4.4.1.e164.arpa
+echo "=== Basic Record Types ==="
 
 echo "A test"
 delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace cloudflare.com
 
-echo "CERT test"
-delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace +short TXT cloudflare.com
+echo "AAAA test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t AAAA cloudflare.com
+
+echo "NS test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t NS cloudflare.com
+
+echo "SOA test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t SOA cloudflare.com
+
+echo "MX test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t MX gmail.com
+
+echo "TXT test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t TXT cloudflare.com
+
+echo "HINFO test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t HINFO hinfo.example.com
+
+echo "SRV test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t SRV _xmpp-server._tcp.jabber.org
+
+echo "LOC test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t LOC cambridge-net.example.com
+
+echo "NAPTR test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t NAPTR 4.4.4.4.2.3.3.2.4.4.1.e164.arpa
+
+echo "=== DNSSEC Record Types ==="
+
+echo "DNSKEY test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t DNSKEY cloudflare.com
+
+echo "RRSIG test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t RRSIG google.com
+
+echo "NSEC test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t NSEC nonexistent.cloudflare.com
+
+echo "CDS test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t CDS cloudflare.com
+
+echo "CDNSKEY test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t CDNSKEY cloudflare.com
+
+echo "=== Security/Encryption Record Types ==="
+
+echo "SSHFP test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t SSHFP github.com
+
+echo "TLSA test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t TLSA _443._tcp.www.huque.com
+
+echo "OPENPGPKEY test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t OPENPGPKEY _openpgpkey.example.com
+
+echo "SMIMEA test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t SMIMEA _smimecert.example.com
+
+echo "=== Advanced/Special Record Types ==="
+
+echo "CAA test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t CAA cloudflare.com
+
+echo "URI test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t URI uri.example.com
+
+echo "HIP test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t HIP hip.example.com
+
+echo "SVCB test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t SVCB _1234._bar.example.com
+
+echo "HTTPS test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t HTTPS cloudflare.com
+
+echo "KX test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t KX kx.example.com
+
+echo "IPSECKEY test"
+delv @127.0.0.1 -p 25454 +yaml +rtrace +vtrace -t IPSECKEY ipseckey.example.com
+
+
 
 

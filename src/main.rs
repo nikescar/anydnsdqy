@@ -306,6 +306,23 @@ impl MyHandler {
             }
         };
 
+        // DNSSEC passthrough: If raw bytes are available, use them directly
+        // This preserves RRSIG signatures which are cryptographically sensitive
+        if let Some(first_msg) = messagestr.first() {
+            if let Some(raw_bytes) = first_msg.response().raw_bytes() {
+                tracing::debug!("Using raw DNS response bytes for DNSSEC passthrough ({} bytes)", raw_bytes.len());
+                // Modify the response ID to match the query ID
+                let mut response_bytes = raw_bytes.to_vec();
+                if response_bytes.len() >= 2 {
+                    // DNS packet ID is in the first 2 bytes (big-endian)
+                    let query_id = packet.id();
+                    response_bytes[0] = (query_id >> 8) as u8;
+                    response_bytes[1] = (query_id & 0xFF) as u8;
+                }
+                return response_bytes;
+            }
+        }
+
         tracing::debug!("messagestr : {}",messagestr);
         let mut reply = Packet::new_reply(packet.id());
 
@@ -973,7 +990,8 @@ impl MyHandler {
                             None => 0,
                         };
                         // RFC 4034: Parse RRSIG fields from dqy's text output
-                        // Format: RRSIG type_covered algorithm labels original_ttl signer_name expiration inception key_tag signature
+                        // DQY Format: RRSIG type_covered algorithm labels original_ttl signer_name expiration inception key_tag signature
+                        // (Note: dqy outputs signer_name before expiration/inception, unlike RFC wire format)
                         let labels = msgparts.get(7).unwrap_or(&"0").parse().unwrap_or(0);
                         let original_ttl = msgparts.get(8).unwrap_or(&"0").parse().unwrap_or(0);
                         let signer_name = Name::new(msgparts.get(9).unwrap_or(&"")).unwrap();
