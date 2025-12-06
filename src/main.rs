@@ -224,6 +224,14 @@ impl CustomHandler for MyHandler {
             // ** bacause of error transmission ** FIXME
             cantranslate = true; // dqy supports => true
         }
+        if question.qtype == QTYPE::TYPE(TYPE::CDS){
+            self.options.protocol.qtype.push(QType::CDS);
+            cantranslate = true; // dqy supports => true
+        }
+        if question.qtype == QTYPE::TYPE(TYPE::CDNSKEY){
+            self.options.protocol.qtype.push(QType::CDNSKEY);
+            cantranslate = true; // dqy supports => true
+        }
         if question.qtype == QTYPE::TYPE(TYPE::NSEC){
             self.options.protocol.qtype.push(QType::NSEC);
             cantranslate = true; // dqy supports => true
